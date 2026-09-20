@@ -96,7 +96,6 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
           .from('messages')
           .select(`
             *,
-            sender:profiles(*),
             media:message_media(*),
             reactions:message_reactions(*),
             read_status:message_read_status(*)
@@ -111,6 +110,15 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
           setLoading(false)
           return
         }
+
+        // Fetch sender profiles separately to avoid invalid PostgREST relationship join
+        const senderIds = Array.from(new Set(rawMsgs.map((m) => m.sender_id)))
+        const { data: senderProfiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', senderIds)
+
+        const senderMap = new Map((senderProfiles || []).map((p) => [p.id, p]))
 
         // Decrypt messages & resolve media signed URLs
         const processedMessages: Message[] = await Promise.all(
@@ -132,6 +140,7 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
 
             return {
               ...msg,
+              sender: senderMap.get(msg.sender_id) || undefined,
               decrypted_content: decrypted || '',
               media: mediaWithUrls,
             }

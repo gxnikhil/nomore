@@ -31,7 +31,6 @@ export function useStories(userId: string | undefined) {
         .from('stories')
         .select(`
           *,
-          profile:profiles(*),
           views:story_views(*),
           reactions:story_reactions(*)
         `)
@@ -46,12 +45,22 @@ export function useStories(userId: string | undefined) {
         return
       }
 
-      // 2. Resolve signed URLs for each story media file
+      // 2. Fetch author profiles separately (avoiding invalid PostgREST relationship join)
+      const authorIds = Array.from(new Set(rawStories.map((s) => s.user_id)))
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', authorIds)
+
+      const profileMap = new Map((profilesData || []).map((p) => [p.id, p]))
+
+      // 3. Resolve signed URLs for each story media file & attach author profile
       const storiesWithUrls: Story[] = await Promise.all(
         rawStories.map(async (story) => {
           const mediaUrl = await getSignedMediaUrl(BUCKETS.STORIES, story.storage_path)
           return {
             ...story,
+            profile: profileMap.get(story.user_id) || undefined,
             media_url: mediaUrl || undefined,
           }
         })
