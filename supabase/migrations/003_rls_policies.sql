@@ -147,6 +147,10 @@ create policy "Members can view conversations"
   on public.conversations for select
   using (public.is_nomore_member(auth.uid()));
 
+create policy "Members can create conversations"
+  on public.conversations for insert
+  with check (public.is_nomore_member(auth.uid()));
+
 -- ============================================================================
 -- CONVERSATION MEMBERS
 -- ============================================================================
@@ -154,6 +158,10 @@ create policy "Members can view conversations"
 create policy "Members can view conversation_members"
   on public.conversation_members for select
   using (public.is_nomore_member(auth.uid()));
+
+create policy "Members can create conversation_members"
+  on public.conversation_members for insert
+  with check (public.is_nomore_member(auth.uid()));
 
 -- ============================================================================
 -- MESSAGES

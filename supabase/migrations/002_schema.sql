@@ -11,14 +11,14 @@ create extension if not exists "uuid-ossp";
 
 -- Private space (exactly one)
 create table if not exists public.private_spaces (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   name text not null default 'NOMORE',
   created_at timestamptz not null default now()
 );
 
 -- Space members (exactly two)
 create table if not exists public.private_space_members (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   space_id uuid not null references public.private_spaces(id) on delete cascade,
   auth_user_id uuid not null references auth.users(id) on delete cascade,
   role text not null default 'member',
@@ -45,7 +45,7 @@ create table if not exists public.profiles (
 -- ============================================================================
 
 create table if not exists public.stories (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   space_id uuid not null references public.private_spaces(id) on delete cascade,
   media_type text not null check (media_type in ('image', 'video')),
@@ -61,7 +61,7 @@ create index if not exists idx_stories_expires_at on public.stories(expires_at);
 create index if not exists idx_stories_space_id on public.stories(space_id);
 
 create table if not exists public.story_views (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   story_id uuid not null references public.stories(id) on delete cascade,
   viewer_id uuid not null references auth.users(id) on delete cascade,
   viewed_at timestamptz not null default now(),
@@ -69,7 +69,7 @@ create table if not exists public.story_views (
 );
 
 create table if not exists public.story_reactions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   story_id uuid not null references public.stories(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   emoji text not null,
@@ -82,13 +82,13 @@ create table if not exists public.story_reactions (
 -- ============================================================================
 
 create table if not exists public.conversations (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   space_id uuid not null references public.private_spaces(id) on delete cascade,
   created_at timestamptz not null default now()
 );
 
 create table if not exists public.conversation_members (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   joined_at timestamptz not null default now(),
@@ -96,7 +96,7 @@ create table if not exists public.conversation_members (
 );
 
 create table if not exists public.messages (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   sender_id uuid not null references auth.users(id) on delete cascade,
   encrypted_content text, -- E2EE encrypted message content (base64)
@@ -112,7 +112,7 @@ create index if not exists idx_messages_conversation_id on public.messages(conve
 create index if not exists idx_messages_sender_id on public.messages(sender_id);
 
 create table if not exists public.message_media (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   message_id uuid not null references public.messages(id) on delete cascade,
   storage_path text not null,
   media_type text not null check (media_type in ('image', 'video')),
@@ -127,7 +127,7 @@ create table if not exists public.message_media (
 create index if not exists idx_message_media_message_id on public.message_media(message_id);
 
 create table if not exists public.message_reactions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   message_id uuid not null references public.messages(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   emoji text not null,
@@ -136,7 +136,7 @@ create table if not exists public.message_reactions (
 );
 
 create table if not exists public.message_read_status (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   message_id uuid not null references public.messages(id) on delete cascade,
   user_id uuid not null references auth.users(id) on delete cascade,
   read_at timestamptz not null default now(),
@@ -148,7 +148,7 @@ create table if not exists public.message_read_status (
 -- ============================================================================
 
 create table if not exists public.shared_albums (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   space_id uuid not null references public.private_spaces(id) on delete cascade,
   title text not null,
   description text,
@@ -161,7 +161,7 @@ create table if not exists public.shared_albums (
 create index if not exists idx_shared_albums_space_id on public.shared_albums(space_id);
 
 create table if not exists public.album_media (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   album_id uuid not null references public.shared_albums(id) on delete cascade,
   storage_path text not null,
   media_type text not null check (media_type in ('image', 'video')),
@@ -177,7 +177,7 @@ create table if not exists public.album_media (
 create index if not exists idx_album_media_album_id on public.album_media(album_id);
 
 create table if not exists public.saved_media (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   space_id uuid not null references public.private_spaces(id) on delete cascade,
   storage_path text not null,
   media_type text not null check (media_type in ('image', 'video')),
@@ -199,7 +199,7 @@ create index if not exists idx_saved_media_memory_date on public.saved_media(mem
 -- ============================================================================
 
 create table if not exists public.notifications (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   recipient_id uuid not null references auth.users(id) on delete cascade,
   sender_id uuid references auth.users(id) on delete set null,
   type text not null,
