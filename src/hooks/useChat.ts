@@ -32,10 +32,7 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
 
   // 1. Get or create conversation for the space
   const initConversation = useCallback(async () => {
-    if (!currentUserId) {
-      setLoading(false)
-      return null
-    }
+    if (!currentUserId) return null
 
     try {
       const supabase = createClient()
@@ -87,9 +84,9 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
 
   // 2. Fetch messages & decrypt content
   const fetchMessages = useCallback(
-    async (convId: string) => {
+    async (convId: string, isInitial = false) => {
       try {
-        setLoading(true)
+        if (isInitial) setLoading(true)
         const supabase = createClient()
 
         const { data: rawMsgs, error: msgsErr } = await supabase
@@ -113,12 +110,16 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
 
         // Fetch sender profiles separately to avoid invalid PostgREST relationship join
         const senderIds = Array.from(new Set(rawMsgs.map((m) => m.sender_id)))
-        const { data: senderProfiles } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', senderIds)
+        let senderMap = new Map()
 
-        const senderMap = new Map((senderProfiles || []).map((p) => [p.id, p]))
+        if (senderIds.length > 0) {
+          const { data: senderProfiles } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('id', senderIds)
+
+          senderMap = new Map((senderProfiles || []).map((p) => [p.id, p]))
+        }
 
         // Decrypt messages & resolve media signed URLs
         const processedMessages: Message[] = await Promise.all(
@@ -158,10 +159,11 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
   )
 
   useEffect(() => {
+    if (!currentUserId) return
     initConversation().then((convId) => {
-      if (convId) fetchMessages(convId)
+      if (convId) fetchMessages(convId, true)
     })
-  }, [initConversation, fetchMessages])
+  }, [currentUserId, initConversation, fetchMessages])
 
   // 3. Realtime subscription for messages & presence
   useEffect(() => {
@@ -175,21 +177,21 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
         () => {
-          fetchMessages(conversationId)
+          fetchMessages(conversationId, false)
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'message_reactions' },
         () => {
-          fetchMessages(conversationId)
+          fetchMessages(conversationId, false)
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'message_read_status' },
         () => {
-          fetchMessages(conversationId)
+          fetchMessages(conversationId, false)
         }
       )
       .subscribe()
@@ -381,36 +383,115 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
     }
   }
 
-  // 8. Delete own message
-  const deleteMessage = async (messageId: string) => {
-    if (!currentUserId || !conversationId) return
+  // 8. Delete own message for everyone (Storage cleanup required before DB delete)
+  const deleteMessage = async (messageId: string): Promise<boolean> => {
+    if (!currentUserId || !conversationId) return false
 
     const targetMsg = messages.find((m) => m.id === messageId)
     if (!targetMsg || targetMsg.sender_id !== currentUserId) {
       toast.error('You can only delete your own messages.')
-      return
+      return false
     }
 
     try {
       const supabase = createClient()
 
-      // Delete storage files if media message
+      // 1. Delete storage files first if media message
       if (targetMsg.media && targetMsg.media.length > 0) {
         for (const m of targetMsg.media) {
-          await deletePrivateFile(BUCKETS.MESSAGES, m.storage_path)
+          const { error: storageErr } = await deletePrivateFile(BUCKETS.MESSAGES, m.storage_path)
+          if (storageErr) {
+            console.error('Storage file deletion error:', storageErr)
+            throw new Error(`Storage cleanup failed for ${m.file_name || m.storage_path}. Aborting deletion.`)
+          }
         }
       }
 
-      // Delete message record
-      const { error: delErr } = await supabase.from('messages').delete().eq('id', messageId)
+      // 2. Delete message record in DB
+      const { error: delErr } = await supabase
+        .from('messages')
+        .delete()
+        .eq('id', messageId)
+        .eq('sender_id', currentUserId)
+
       if (delErr) throw delErr
 
-      toast.success('Message deleted.')
-      await fetchMessages(conversationId)
+      toast.success('Deleted for everyone.')
+      setMessages((prev) => prev.filter((m) => m.id !== messageId))
+      return true
     } catch (err: any) {
       console.error('Error deleting message:', err)
-      toast.error('Failed to delete message.')
+      toast.error(err?.message || 'Failed to delete message.')
+      return false
     }
+  }
+
+  // 9. Bulk delete own messages for everyone (Per-message storage verification)
+  const deleteMessages = async (messageIds: string[]): Promise<boolean> => {
+    if (!currentUserId || !conversationId || messageIds.length === 0) return false
+
+    const targetMsgs = messages.filter((m) => messageIds.includes(m.id) && m.sender_id === currentUserId)
+    if (targetMsgs.length === 0) {
+      toast.error('No valid own messages selected for deletion.')
+      return false
+    }
+
+    const supabase = createClient()
+    const successfulDeletedIds: string[] = []
+    let failedCount = 0
+
+    for (const msg of targetMsgs) {
+      try {
+        // 1. Delete storage files first if media message
+        let storageSuccess = true
+        if (msg.media && msg.media.length > 0) {
+          for (const m of msg.media) {
+            const { error: storageErr } = await deletePrivateFile(BUCKETS.MESSAGES, m.storage_path)
+            if (storageErr) {
+              console.error(`Storage deletion failed for ${m.storage_path}:`, storageErr)
+              storageSuccess = false
+              break
+            }
+          }
+        }
+
+        if (!storageSuccess) {
+          failedCount++
+          continue // Abort DB deletion for this message if storage cleanup failed
+        }
+
+        // 2. Delete database record
+        const { error: delErr } = await supabase
+          .from('messages')
+          .delete()
+          .eq('id', msg.id)
+          .eq('sender_id', currentUserId)
+
+        if (delErr) {
+          console.error(`DB deletion failed for message ${msg.id}:`, delErr)
+          failedCount++
+        } else {
+          successfulDeletedIds.push(msg.id)
+        }
+      } catch (err) {
+        console.error(`Error deleting message ${msg.id}:`, err)
+        failedCount++
+      }
+    }
+
+    if (successfulDeletedIds.length > 0) {
+      setMessages((prev) => prev.filter((m) => !successfulDeletedIds.includes(m.id)))
+    }
+
+    if (failedCount > 0 && successfulDeletedIds.length > 0) {
+      toast.warning(`Deleted ${successfulDeletedIds.length} message(s). ${failedCount} message(s) failed cleanup and remain visible.`)
+    } else if (failedCount > 0 && successfulDeletedIds.length === 0) {
+      toast.error('Failed to delete selected message(s).')
+    } else {
+      toast.success(`Deleted ${successfulDeletedIds.length} message${successfulDeletedIds.length > 1 ? 's' : ''} for everyone.`)
+    }
+
+    return successfulDeletedIds.length > 0
   }
 
   return {
@@ -427,6 +508,7 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
     reactToMessage,
     markAsRead,
     deleteMessage,
+    deleteMessages,
     setTypingState,
   }
 }

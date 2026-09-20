@@ -16,6 +16,9 @@ import {
   Loader2,
   AlertCircle,
   Heart,
+  Trash2,
+  CheckSquare,
+  Square,
 } from 'lucide-react'
 import { Message } from '@/lib/types'
 
@@ -36,11 +39,14 @@ export default function ChatPage() {
     reactToMessage,
     markAsRead,
     deleteMessage,
+    deleteMessages,
     setTypingState,
   } = useChat(currentUserId, partnerProfile)
 
   const [input, setInput] = useState('')
   const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [isSelectMode, setIsSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [activeMedia, setActiveMedia] = useState<{
     url: string
     type: 'image' | 'video'
@@ -79,45 +85,122 @@ export default function ChatPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  const toggleSelectMessage = (messageId: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(messageId) ? prev.filter((id) => id !== messageId) : [...prev, messageId]
+    )
+  }
+
+  const ownMessageIds = messages.filter((m) => m.sender_id === currentUserId).map((m) => m.id)
+
+  const handleSelectAllOwn = () => {
+    if (selectedIds.length === ownMessageIds.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(ownMessageIds)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return
+    const success = await deleteMessages(selectedIds)
+    if (success) {
+      setSelectedIds([])
+      setIsSelectMode(false)
+    }
+  }
+
   const partnerName = partnerProfile?.display_name || partnerProfile?.username || 'Partner'
 
   return (
     <div className="flex flex-col h-[calc(100dvh-5.5rem)] max-w-4xl mx-auto animate-fade-in">
       {/* 1. Chat Header Bar */}
       <div className="glass-card p-4 rounded-2xl border border-[var(--color-border)] flex items-center justify-between shrink-0 mb-3">
-        <div className="flex items-center gap-3">
-          <div className="relative w-10 h-10 rounded-full bg-[var(--color-bg-elevated)] border border-[var(--color-border)] flex items-center justify-center font-bold text-sm text-[var(--color-accent)]">
-            {partnerProfile?.avatar_url ? (
-              <img
-                src={partnerProfile.avatar_url}
-                alt={partnerName}
-                className="w-full h-full object-cover rounded-full"
-              />
-            ) : (
-              <span>{partnerName.charAt(0).toUpperCase()}</span>
-            )}
-          </div>
-          <div>
-            <h2 className="font-display font-semibold text-base text-[var(--color-text-primary)] flex items-center gap-2">
-              <span>{partnerName}</span>
-            </h2>
-            <p className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>ECDH P-256 + AES-256-GCM End-to-End Encrypted</span>
-            </p>
-          </div>
-        </div>
+        {isSelectMode ? (
+          /* Multi-select Header Toolbar */
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setIsSelectMode(false)
+                  setSelectedIds([])
+                }}
+                className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <span className="font-semibold text-sm text-[var(--color-text-primary)]">
+                {selectedIds.length} Selected
+              </span>
+            </div>
 
-        {/* Security Info Badge */}
-        <div className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-950/40 text-emerald-300 border border-emerald-800/40">
-          <Lock className="w-3.5 h-3.5" />
-          <span>Zero-Knowledge Server</span>
-        </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSelectAllOwn}
+                className="text-xs px-3 py-1.5 rounded-xl border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)]"
+              >
+                {selectedIds.length === ownMessageIds.length ? 'Deselect All' : 'Select All Own'}
+              </button>
+
+              <button
+                onClick={handleBulkDelete}
+                disabled={selectedIds.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-950/80 text-red-300 border border-red-800/60 hover:bg-red-900 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete for Everyone ({selectedIds.length})</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Standard Header */
+          <>
+            <div className="flex items-center gap-3">
+              <div className="relative w-10 h-10 rounded-full bg-[var(--color-bg-elevated)] border border-[var(--color-border)] flex items-center justify-center font-bold text-sm text-[var(--color-accent)]">
+                {partnerProfile?.avatar_url ? (
+                  <img
+                    src={partnerProfile.avatar_url}
+                    alt={partnerName}
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                ) : (
+                  <span>{partnerName.charAt(0).toUpperCase()}</span>
+                )}
+              </div>
+              <div>
+                <h2 className="font-display font-semibold text-base text-[var(--color-text-primary)] flex items-center gap-2">
+                  <span>{partnerName}</span>
+                </h2>
+                <p className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>ECDH P-256 + AES-256-GCM End-to-End Encrypted</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Header Right Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsSelectMode(true)}
+                title="Select messages"
+                className="px-3 py-1.5 rounded-xl text-xs font-medium border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)] transition-colors flex items-center gap-1.5"
+              >
+                <CheckSquare className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Select</span>
+              </button>
+
+              <div className="hidden sm:flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-950/40 text-emerald-300 border border-emerald-800/40">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Zero-Knowledge Server</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* 2. Messages Display Area */}
       <div className="flex-1 glass-card p-4 rounded-2xl border border-[var(--color-border)] overflow-y-auto space-y-3 flex flex-col">
-        {isKeyInitializing || loading ? (
+        {isKeyInitializing || loading || !currentUserId ? (
           <div className="flex-1 flex flex-col items-center justify-center space-y-3 text-[var(--color-text-muted)]">
             <Loader2 className="w-8 h-8 text-[var(--color-accent)] animate-spin" />
             <p className="text-xs">Establishing E2EE keys & loading private messages...</p>
@@ -129,6 +212,9 @@ export default function ChatPage() {
                 key={msg.id}
                 message={msg}
                 currentUserId={currentUserId}
+                isSelectMode={isSelectMode}
+                isSelected={selectedIds.includes(msg.id)}
+                onToggleSelect={toggleSelectMessage}
                 onReact={reactToMessage}
                 onDelete={deleteMessage}
                 onReply={(m) => setReplyTo(m)}

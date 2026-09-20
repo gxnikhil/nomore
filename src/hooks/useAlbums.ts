@@ -24,7 +24,7 @@ export function useAlbums(currentUserId: string | undefined) {
 
       const { data: rawAlbums, error: dbErr } = await supabase
         .from('shared_albums')
-        .select('*, creator:profiles(*)')
+        .select('*')
         .order('updated_at', { ascending: false })
 
       if (dbErr) throw dbErr
@@ -33,6 +33,19 @@ export function useAlbums(currentUserId: string | undefined) {
         setAlbums([])
         setLoading(false)
         return
+      }
+
+      // Fetch creator profiles separately to avoid invalid PostgREST relationship join
+      const creatorIds = Array.from(new Set(rawAlbums.map((a) => a.created_by).filter(Boolean)))
+      let creatorMap = new Map()
+
+      if (creatorIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', creatorIds)
+
+        creatorMap = new Map((profilesData || []).map((p) => [p.id, p]))
       }
 
       // Resolve cover URLs and count items
@@ -49,6 +62,7 @@ export function useAlbums(currentUserId: string | undefined) {
 
           return {
             ...album,
+            creator: creatorMap.get(album.created_by) || undefined,
             cover_url: coverUrl || undefined,
             media_count: count || 0,
           }

@@ -26,7 +26,7 @@ export function useMemories(currentUserId: string | undefined) {
 
       let query = supabase
         .from('saved_media')
-        .select('*, uploader:profiles(*)')
+        .select('*')
         .order('memory_date', { ascending: false })
         .order('created_at', { ascending: false })
 
@@ -43,10 +43,24 @@ export function useMemories(currentUserId: string | undefined) {
         return
       }
 
-      // Resolve signed URLs for memories
+      // Fetch uploader profiles separately to avoid invalid PostgREST relationship join
+      const uploaderIds = Array.from(new Set(rawData.map((item) => item.uploaded_by).filter(Boolean)))
+      let uploaderMap = new Map()
+
+      if (uploaderIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', uploaderIds)
+
+        uploaderMap = new Map((profilesData || []).map((p) => [p.id, p]))
+      }
+
+      // Resolve signed URLs for memories & attach uploader profile
       const withUrls: SavedMedia[] = await Promise.all(
         rawData.map(async (item) => ({
           ...item,
+          uploader: uploaderMap.get(item.uploaded_by) || undefined,
           media_url: (await getSignedMediaUrl(BUCKETS.MEMORIES, item.storage_path)) || undefined,
         }))
       )
@@ -74,7 +88,7 @@ export function useMemories(currentUserId: string | undefined) {
       // Query saved_media matching current month and day from previous years
       const { data: rawData } = await supabase
         .from('saved_media')
-        .select('*, uploader:profiles(*)')
+        .select('*')
 
       if (rawData && rawData.length > 0) {
         const matching = rawData.filter((item) => {
@@ -86,9 +100,22 @@ export function useMemories(currentUserId: string | undefined) {
           return m === currentMonth && d === currentDay && y < currentYear
         })
 
+        const uploaderIds = Array.from(new Set(matching.map((item) => item.uploaded_by).filter(Boolean)))
+        let uploaderMap = new Map()
+
+        if (uploaderIds.length > 0) {
+          const { data: profilesData } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('id', uploaderIds)
+
+          uploaderMap = new Map((profilesData || []).map((p) => [p.id, p]))
+        }
+
         const withUrls: SavedMedia[] = await Promise.all(
           matching.map(async (item) => ({
             ...item,
+            uploader: uploaderMap.get(item.uploaded_by) || undefined,
             media_url: (await getSignedMediaUrl(BUCKETS.MEMORIES, item.storage_path)) || undefined,
           }))
         )

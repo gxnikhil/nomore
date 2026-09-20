@@ -17,13 +17,38 @@ export function useNotifications(currentUserId: string | undefined) {
 
       const { data, error } = await supabase
         .from('notifications')
-        .select('*, sender:profiles(*)')
+        .select('*')
         .eq('recipient_id', currentUserId)
         .order('created_at', { ascending: false })
         .limit(20)
 
       if (error) throw error
-      setNotifications(data || [])
+
+      if (!data || data.length === 0) {
+        setNotifications([])
+        setLoading(false)
+        return
+      }
+
+      // Fetch sender profiles separately to avoid invalid PostgREST relationship join
+      const senderIds = Array.from(new Set(data.map((n) => n.sender_id).filter(Boolean)))
+      let senderMap = new Map()
+
+      if (senderIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', senderIds)
+
+        senderMap = new Map((profilesData || []).map((p) => [p.id, p]))
+      }
+
+      const notificationsWithSender: Notification[] = data.map((n) => ({
+        ...n,
+        sender: n.sender_id ? senderMap.get(n.sender_id) || undefined : undefined,
+      }))
+
+      setNotifications(notificationsWithSender)
     } catch (err) {
       console.error('Error fetching notifications:', err)
     } finally {

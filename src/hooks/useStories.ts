@@ -233,29 +233,43 @@ export function useStories(userId: string | undefined) {
 
     try {
       const supabase = createClient()
-      const { error: reactError } = await supabase
-        .from('story_reactions')
-        .upsert({ story_id: storyId, user_id: userId, emoji })
+      const targetStory = stories.find((s) => s.id === storyId)
+      const existingReaction = targetStory?.reactions?.find((r) => r.user_id === userId)
 
-      if (reactError) throw reactError
+      // 1. Delete existing reaction for this user on this story if present
+      if (existingReaction) {
+        const { error: delErr } = await supabase
+          .from('story_reactions')
+          .delete()
+          .eq('story_id', storyId)
+          .eq('user_id', userId)
 
-      toast.success(`Reacted ${emoji}`)
+        if (delErr) throw delErr
+      }
+
+      // 2. If selecting a new emoji (or if no reaction existed), insert new reaction
+      let newReactionItem: StoryReaction | null = null
+      if (!existingReaction || existingReaction.emoji !== emoji) {
+        const { data: inserted, error: insErr } = await supabase
+          .from('story_reactions')
+          .insert({ story_id: storyId, user_id: userId, emoji })
+          .select('*')
+          .single()
+
+        if (insErr) throw insErr
+        newReactionItem = inserted as StoryReaction
+      }
+
+      toast.success(existingReaction && existingReaction.emoji === emoji ? 'Reaction removed' : `Reacted ${emoji}`)
 
       // Optimistic update
       setStories((prev) =>
         prev.map((s) => {
           if (s.id === storyId) {
-            const existing = (s.reactions || []).filter((r) => r.user_id !== userId)
-            const newReaction: StoryReaction = {
-              id: crypto.randomUUID(),
-              story_id: storyId,
-              user_id: userId,
-              emoji,
-              created_at: new Date().toISOString(),
-            }
+            const filteredReactions = (s.reactions || []).filter((r) => r.user_id !== userId)
             return {
               ...s,
-              reactions: [...existing, newReaction],
+              reactions: newReactionItem ? [...filteredReactions, newReactionItem] : filteredReactions,
             }
           }
           return s

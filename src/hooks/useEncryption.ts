@@ -84,40 +84,46 @@ export function useEncryption(userId: string | undefined, partnerId: string | un
   }, [initEncryption])
 
   // Encrypt plaintext string
-  const encryptText = async (plaintext: string): Promise<{ ciphertext: string; iv: string } | null> => {
-    const activeKey = sharedKey || ownSharedKey
-    if (!activeKey) {
-      toast.error('Encryption key not established yet.')
-      return null
-    }
-    try {
-      return await encryptMessage(plaintext, activeKey)
-    } catch (err) {
-      console.error('Encryption error:', err)
-      toast.error('Failed to encrypt message.')
-      return null
-    }
-  }
+  const encryptText = useCallback(
+    async (plaintext: string): Promise<{ ciphertext: string; iv: string } | null> => {
+      const activeKey = sharedKey || ownSharedKey
+      if (!activeKey) {
+        toast.error('Encryption key not established yet.')
+        return null
+      }
+      try {
+        return await encryptMessage(plaintext, activeKey)
+      } catch (err) {
+        console.error('Encryption error:', err)
+        toast.error('Failed to encrypt message.')
+        return null
+      }
+    },
+    [sharedKey, ownSharedKey]
+  )
 
   // Decrypt ciphertext string
-  const decryptText = async (ciphertext: string, iv: string): Promise<string> => {
-    const activeKey = sharedKey || ownSharedKey
-    if (!activeKey) return '🔐 [Encrypted message]'
-    try {
-      return await decryptMessage(ciphertext, iv, activeKey)
-    } catch (err) {
-      // If decryption with active key fails, try own-key fallback if different
-      if (ownSharedKey && activeKey !== ownSharedKey) {
-        try {
-          return await decryptMessage(ciphertext, iv, ownSharedKey)
-        } catch (errFallback) {
-          // Both key attempts failed
+  const decryptText = useCallback(
+    async (ciphertext: string, iv: string): Promise<string> => {
+      const activeKey = sharedKey || ownSharedKey
+      if (!activeKey) return '🔐 [Encrypted message]'
+      try {
+        return await decryptMessage(ciphertext, iv, activeKey)
+      } catch (err) {
+        // If decryption with active key fails, try own-key fallback if different
+        if (ownSharedKey && activeKey !== ownSharedKey) {
+          try {
+            return await decryptMessage(ciphertext, iv, ownSharedKey)
+          } catch (errFallback) {
+            // Both key attempts failed
+          }
         }
+        console.error('Decryption error:', err)
+        return '⚠️ [Decryption failed]'
       }
-      console.error('Decryption error:', err)
-      return '⚠️ [Decryption failed]'
-    }
-  }
+    },
+    [sharedKey, ownSharedKey]
+  )
 
   return {
     sharedKey: sharedKey || ownSharedKey,
