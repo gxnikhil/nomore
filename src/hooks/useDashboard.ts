@@ -28,19 +28,27 @@ export function useDashboard(userId: string | undefined) {
   const [error, setError] = useState<string | null>(null)
 
   const fetchDashboardData = useCallback(async () => {
-    if (!userId) return
-
     try {
       setLoading(true)
       setError(null)
       const supabase = createClient()
 
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      const activeUserId = (!userId || userId === 'me') ? user?.id : userId
+
+      if (!activeUserId) {
+        setLoading(false)
+        return
+      }
+
       // 1. Fetch profiles
       const { data: profiles, error: profileErr } = await supabase.from('profiles').select('*')
       if (profileErr) throw profileErr
 
-      const myProf = profiles?.find((p) => p.id === userId) || null
-      const partnerProf = profiles?.find((p) => p.id !== userId) || null
+      const myProf = profiles?.find((p) => p.id === activeUserId) || null
+      const partnerProf = profiles?.find((p) => p.id !== activeUserId) || null
 
       // Compute Birthday Countdown
       let bdayCountdown = null
@@ -98,7 +106,7 @@ export function useDashboard(userId: string | undefined) {
       const { data: convMembers } = await supabase
         .from('conversation_members')
         .select('conversation_id')
-        .eq('user_id', userId)
+        .eq('user_id', activeUserId)
 
       if (convMembers && convMembers.length > 0) {
         const convIds = convMembers.map((cm) => cm.conversation_id)

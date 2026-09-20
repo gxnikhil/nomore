@@ -32,7 +32,10 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
 
   // 1. Get or create conversation for the space
   const initConversation = useCallback(async () => {
-    if (!currentUserId) return null
+    if (!currentUserId) {
+      setLoading(false)
+      return null
+    }
 
     try {
       const supabase = createClient()

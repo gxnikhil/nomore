@@ -18,7 +18,10 @@ export function useEncryption(userId: string | undefined, partnerId: string | un
   const [partnerHasKey, setPartnerHasKey] = useState(false)
 
   const initEncryption = useCallback(async () => {
-    if (!userId) return
+    if (!userId) {
+      setIsInitializing(false)
+      return
+    }
 
     try {
       setIsInitializing(true)
