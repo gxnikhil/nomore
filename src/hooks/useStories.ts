@@ -269,46 +269,43 @@ export function useStories(userId: string | undefined) {
 
     try {
       const supabase = createClient()
-      const targetStory = stories.find((s) => s.id === storyId)
-      const existingReaction = targetStory?.reactions?.find((r) => r.user_id === userId)
+      const { error: rpcErr } = await supabase.rpc('react_to_story_and_notify_chat', {
+        p_story_id: storyId,
+        p_emoji: emoji,
+      })
 
-      if (existingReaction) {
-        await supabase
-          .from('story_reactions')
-          .delete()
-          .eq('story_id', storyId)
-          .eq('user_id', userId)
-      }
+      if (rpcErr) throw rpcErr
 
-      let newReactionItem: StoryReaction | null = null
-      if (!existingReaction || existingReaction.emoji !== emoji) {
-        const { data: inserted, error: insErr } = await supabase
-          .from('story_reactions')
-          .insert({ story_id: storyId, user_id: userId, emoji })
-          .select('*')
-          .single()
-
-        if (insErr) throw insErr
-        newReactionItem = inserted as StoryReaction
-      }
-
-      toast.success(existingReaction && existingReaction.emoji === emoji ? 'Reaction removed' : `Reacted ${emoji}`)
-
-      setStories((prev) =>
-        prev.map((s) => {
-          if (s.id === storyId) {
-            const filteredReactions = (s.reactions || []).filter((r) => r.user_id !== userId)
-            return {
-              ...s,
-              reactions: newReactionItem ? [...filteredReactions, newReactionItem] : filteredReactions,
-            }
-          }
-          return s
-        })
-      )
+      toast.success(`Reacted ${emoji}`)
+      await fetchStories()
     } catch (err: any) {
       console.error('Error reacting to story:', err)
-      toast.error('Failed to react.')
+      toast.error(err?.message || 'Failed to react.')
+    }
+  }
+
+  // Fetch viewers for a story (author only)
+  const fetchStoryViewers = async (storyId: string): Promise<Profile[]> => {
+    try {
+      const supabase = createClient()
+      const { data: rawViews, error } = await supabase
+        .from('story_views')
+        .select('viewer_id')
+        .eq('story_id', storyId)
+
+      if (error) throw error
+      if (!rawViews || rawViews.length === 0) return []
+
+      const viewerIds = Array.from(new Set(rawViews.map((v) => v.viewer_id)))
+      const { data: viewerProfiles } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url')
+        .in('id', viewerIds)
+
+      return (viewerProfiles as Profile[]) || []
+    } catch (err) {
+      console.error('Error fetching story viewers:', err)
+      return []
     }
   }
 
@@ -341,6 +338,7 @@ export function useStories(userId: string | undefined) {
     uploadStory,
     sendStoryReply,
     fetchStoryReplies,
+    fetchStoryViewers,
     markAsViewed,
     reactToStory,
     deleteStory,

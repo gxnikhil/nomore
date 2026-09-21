@@ -17,6 +17,7 @@ interface StoryViewerProps {
   onReact: (storyId: string, emoji: string) => void
   onDelete: (storyId: string, storagePath: string) => void
   onSendReply?: (storyId: string, content: string) => Promise<boolean>
+  onFetchViewers?: (storyId: string) => Promise<Profile[]>
 }
 
 const STORY_PHOTO_DURATION_MS = 5000
@@ -32,12 +33,16 @@ export default function StoryViewer({
   onReact,
   onDelete,
   onSendReply,
+  onFetchViewers,
 }: StoryViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex)
   const [progress, setProgress] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
   const [replyText, setReplyText] = useState('')
   const [sendingReply, setSendingReply] = useState(false)
+  const [showViewersModal, setShowViewersModal] = useState(false)
+  const [viewerList, setViewerList] = useState<Profile[]>([])
+  const [loadingViewers, setLoadingViewers] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -264,13 +269,26 @@ export default function StoryViewer({
           )}
 
           {isOwner ? (
-            <div className="flex items-center justify-center gap-1.5 text-xs text-white/70">
+            <button
+              onClick={async (e) => {
+                e.stopPropagation()
+                setIsPaused(true)
+                setShowViewersModal(true)
+                if (onFetchViewers && currentStory) {
+                  setLoadingViewers(true)
+                  const list = await onFetchViewers(currentStory.id)
+                  setViewerList(list)
+                  setLoadingViewers(false)
+                }
+              }}
+              className="flex items-center justify-center gap-1.5 text-xs text-white/90 hover:text-white bg-white/10 hover:bg-white/20 px-3.5 py-1.5 rounded-full mx-auto transition-colors cursor-pointer"
+            >
               <Eye className="w-3.5 h-3.5 text-white" />
               <span>
                 {currentStory.views?.length || 0}{' '}
                 {currentStory.views?.length === 1 ? 'view' : 'views'}
               </span>
-            </div>
+            </button>
           ) : (
             <div className="space-y-2">
               {/* Reactions Bar */}
@@ -316,6 +334,83 @@ export default function StoryViewer({
           )}
         </div>
       </div>
+
+      {/* Story Viewers Sheet Modal (Story Owner Only) */}
+      {showViewersModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => {
+            setShowViewersModal(false)
+            setIsPaused(false)
+          }}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-3xl p-5 text-black space-y-4 shadow-2xl animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[#e5e5e7] pb-3">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-black" />
+                <h3 className="font-bold text-base text-black">
+                  Viewed by ({currentStory.views?.length || 0})
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowViewersModal(false)
+                  setIsPaused(false)
+                }}
+                className="p-1 rounded-full text-[#86868b] hover:text-black hover:bg-[#f5f5f7]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {loadingViewers ? (
+              <div className="flex items-center justify-center py-6 text-[#86868b]">
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                <span className="text-xs">Loading viewers...</span>
+              </div>
+            ) : viewerList.length === 0 ? (
+              <div className="py-6 text-center text-xs text-[#86868b]">
+                No views recorded yet.
+              </div>
+            ) : (
+              <div className="max-h-60 overflow-y-auto space-y-3 pr-1">
+                {viewerList.map((viewer) => {
+                  const name = viewer.display_name || viewer.username || 'Friend'
+                  return (
+                    <div
+                      key={viewer.id}
+                      className="flex items-center gap-3 p-2 rounded-2xl hover:bg-[#f5f5f7] transition-colors"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-[#f5f5f7] border border-[#e5e5e7] overflow-hidden flex items-center justify-center font-bold text-sm text-black">
+                        {viewer.avatar_url ? (
+                          <img
+                            src={viewer.avatar_url}
+                            alt={name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span>{name.charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="text-xs font-bold text-black">{name}</span>
+                        {viewer.username && (
+                          <span className="text-[11px] text-[#86868b]">
+                            @{viewer.username}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

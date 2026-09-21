@@ -131,11 +131,27 @@ export default function MessageBubble({
             </div>
           )}
 
-          {/* Text Message Content */}
+          {/* Text Message Content or Story Reaction Card */}
           {message.decrypted_content && (
-            <p className="text-xs sm:text-sm font-normal leading-relaxed whitespace-pre-wrap break-words">
-              {message.decrypted_content}
-            </p>
+            message.message_type === 'system' && message.decrypted_content.includes('Reacted') ? (
+              <div className="flex items-center gap-2.5 p-2 rounded-xl bg-black/10 dark:bg-white/10 border border-white/10 my-0.5">
+                <span className="text-xl">
+                  {message.decrypted_content.match(/Reacted\s+(.*?)\s+to/)?.[1] || '❤️'}
+                </span>
+                <div>
+                  <span className="text-xs font-bold block leading-snug">
+                    Story Reaction
+                  </span>
+                  <span className="text-[11px] opacity-80 block">
+                    {message.decrypted_content}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs sm:text-sm font-normal leading-relaxed whitespace-pre-wrap break-words">
+                {message.decrypted_content}
+              </p>
+            )
           )}
 
           {/* Footer Meta: Time, Read Status, E2EE Icon */}

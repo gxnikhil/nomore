@@ -37,23 +37,70 @@ export default function ProfilePage() {
     avatarUploading,
     updateProfile,
     uploadAvatar,
+    changeUsername,
   } = useProfile(currentUserId)
 
   const [isEditing, setIsEditing] = useState(false)
   const [displayName, setDisplayName] = useState('')
+  const [usernameInput, setUsernameInput] = useState('')
   const [bio, setBio] = useState('')
+  const [isAvailable, setIsAvailable] = useState<boolean | null>(null)
+  const [checkingUsername, setCheckingUsername] = useState(false)
 
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
   const handleStartEdit = () => {
     if (!profile) return
     setDisplayName(profile.display_name || '')
+    setUsernameInput(profile.username || '')
     setBio(profile.bio || '')
+    setIsAvailable(null)
     setIsEditing(true)
+  }
+
+  const checkAvailability = async (val: string) => {
+    const clean = val.trim().replace(/^@/, '').toLowerCase()
+    if (clean === (profile?.username || '')) {
+      setIsAvailable(null)
+      return
+    }
+
+    if (!/^[a-z0-9_]{3,20}$/.test(clean)) {
+      setIsAvailable(false)
+      return
+    }
+
+    try {
+      setCheckingUsername(true)
+      const supabase = createClient()
+      const { data } = await supabase.rpc('check_username_available', {
+        p_username: clean,
+      })
+      setIsAvailable(Boolean(data))
+    } catch {
+      setIsAvailable(false)
+    } finally {
+      setCheckingUsername(false)
+    }
+  }
+
+  const handleUsernameChange = (val: string) => {
+    const clean = val.toLowerCase().replace(/[^a-z0-9_]/g, '')
+    setUsernameInput(clean)
+    checkAvailability(clean)
   }
 
   const handleSaveEdit = async (e: FormEvent) => {
     e.preventDefault()
+
+    // 1. Update Username if changed
+    const cleanUser = usernameInput.trim().toLowerCase()
+    if (cleanUser && cleanUser !== (profile?.username || '')) {
+      const uSuccess = await changeUsername(cleanUser)
+      if (!uSuccess) return
+    }
+
+    // 2. Update Display Name and Bio
     const success = await updateProfile({
       display_name: displayName,
       bio,
@@ -165,6 +212,40 @@ export default function ProfilePage() {
           {/* Profile Details or Edit Form */}
           {isEditing ? (
             <form onSubmit={handleSaveEdit} className="space-y-4 pt-2">
+              <div>
+                <label className="block text-xs font-semibold text-[#555555] mb-1">
+                  Username Handle (@)
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#86868b] text-xs">
+                    @
+                  </div>
+                  <input
+                    type="text"
+                    value={usernameInput}
+                    onChange={(e) => handleUsernameChange(e.target.value)}
+                    className="input-field pl-7 text-xs"
+                    placeholder="username"
+                    required
+                    minLength={3}
+                    maxLength={20}
+                  />
+                </div>
+                {checkingUsername ? (
+                  <p className="text-[11px] text-[#86868b] mt-1 flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Checking availability...
+                  </p>
+                ) : isAvailable === true ? (
+                  <p className="text-[11px] text-emerald-600 mt-1 font-semibold flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Handle @{usernameInput} is available!
+                  </p>
+                ) : isAvailable === false ? (
+                  <p className="text-[11px] text-red-500 mt-1 font-semibold">
+                    Handle is unavailable or invalid (must be 3-20 a-z, 0-9, _).
+                  </p>
+                ) : null}
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-[#555555] mb-1">
                   Display Name

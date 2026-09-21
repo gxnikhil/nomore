@@ -215,6 +215,7 @@ export default function StoriesPage() {
         onReact={reactToStory}
         onDelete={deleteStory}
         onSendReply={sendStoryReply}
+        onFetchViewers={fetchStoryViewers}
       />
     </div>
   )

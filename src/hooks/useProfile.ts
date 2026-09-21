@@ -143,6 +143,32 @@ export function useProfile(currentUserId: string | undefined) {
     }
   }
 
+  // Change username safely via RPC
+  const changeUsername = async (newUsername: string): Promise<boolean> => {
+    if (!currentUserId) return false
+    const clean = newUsername.trim().toLowerCase()
+
+    try {
+      setSaving(true)
+      const supabase = createClient()
+      const { error } = await supabase.rpc('change_username', {
+        p_new_username: clean,
+      })
+
+      if (error) throw error
+
+      toast.success('Username updated!')
+      await fetchProfiles()
+      return true
+    } catch (err: any) {
+      console.error('Error changing username:', err)
+      toast.error(err?.message || 'Failed to update username.')
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return {
     profile,
     partnerProfile,
@@ -152,5 +178,6 @@ export function useProfile(currentUserId: string | undefined) {
     fetchProfiles,
     updateProfile,
     uploadAvatar,
+    changeUsername,
   }
 }
