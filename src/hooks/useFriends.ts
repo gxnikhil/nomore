@@ -195,22 +195,11 @@ export function useFriends(currentUserId: string | undefined) {
     try {
       const supabase = createClient()
 
-      const { error: reqErr } = await supabase
-        .from('friend_requests')
-        .update({ status: 'accepted', updated_at: new Date().toISOString() })
-        .eq('id', requestId)
-        .eq('receiver_id', currentUserId)
+      const { error: rpcErr } = await supabase.rpc('accept_friend_request', {
+        request_id: requestId,
+      })
 
-      if (reqErr) throw reqErr
-
-      const user1 = currentUserId < senderId ? currentUserId : senderId
-      const user2 = currentUserId < senderId ? senderId : currentUserId
-
-      const { error: fErr } = await supabase
-        .from('friendships')
-        .upsert({ user_id1: user1, user_id2: user2 })
-
-      if (fErr) throw fErr
+      if (rpcErr) throw rpcErr
 
       sendPrivateNotification({
         recipientId: senderId,
@@ -226,7 +215,7 @@ export function useFriends(currentUserId: string | undefined) {
       return true
     } catch (err: any) {
       console.error('Error accepting friend request:', err)
-      toast.error('Failed to accept request.')
+      toast.error(err?.message || 'Failed to accept request.')
       return false
     }
   }
@@ -237,18 +226,18 @@ export function useFriends(currentUserId: string | undefined) {
 
     try {
       const supabase = createClient()
-      const { error } = await supabase
-        .from('friend_requests')
-        .update({ status: 'rejected', updated_at: new Date().toISOString() })
-        .eq('id', requestId)
+      const { error: rpcErr } = await supabase.rpc('reject_friend_request', {
+        request_id: requestId,
+      })
 
-      if (error) throw error
+      if (rpcErr) throw rpcErr
 
       toast.info('Friend request declined.')
       await fetchFriendData()
       return true
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error rejecting request:', err)
+      toast.error(err?.message || 'Failed to decline request.')
       return false
     }
   }
@@ -259,23 +248,18 @@ export function useFriends(currentUserId: string | undefined) {
 
     try {
       const supabase = createClient()
-      const user1 = currentUserId < friendId ? currentUserId : friendId
-      const user2 = currentUserId < friendId ? friendId : currentUserId
+      const { error: rpcErr } = await supabase.rpc('remove_friend', {
+        target_user_id: friendId,
+      })
 
-      const { error } = await supabase
-        .from('friendships')
-        .delete()
-        .eq('user_id1', user1)
-        .eq('user_id2', user2)
-
-      if (error) throw error
+      if (rpcErr) throw rpcErr
 
       toast.success('Removed from friends.')
       await fetchFriendData()
       return true
     } catch (err: any) {
       console.error('Error unfriending:', err)
-      toast.error('Failed to unfriend.')
+      toast.error(err?.message || 'Failed to unfriend.')
       return false
     }
   }
