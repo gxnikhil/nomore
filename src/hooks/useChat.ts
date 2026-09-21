@@ -3,71 +3,65 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Message, MessageMedia, Profile } from '@/lib/types'
-import { useEncryption } from './useEncryption'
 import { getSignedMediaUrl, uploadPrivateFile, deletePrivateFile } from '@/lib/supabase/storage'
 import { sendPrivateNotification } from '@/lib/notifications'
 import { validateMediaFile, getMediaType } from '@/lib/utils'
 import { BUCKETS } from '@/lib/constants'
 import { toast } from 'sonner'
+import { RealtimeChannel } from '@supabase/supabase-js'
 
-export function useChat(currentUserId: string | undefined, partnerProfile: Profile | null) {
+export function useChat(currentUserId: string | undefined, partnerProfile?: Profile | null) {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
-  const [isTyping, setIsTyping] = useState(false)
   const [partnerIsTyping, setPartnerIsTyping] = useState(false)
+
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const presenceChannelRef = useRef<RealtimeChannel | null>(null)
+  const signedUrlCacheRef = useRef<Map<string, string>>(new Map())
 
   const partnerId = partnerProfile?.id
 
-  // E2EE crypto hook
-  const {
-    sharedKey,
-    isInitializing: isKeyInitializing,
-    partnerHasKey,
-    encryptText,
-    decryptText,
-  } = useEncryption(currentUserId, partnerId)
-
-  // 1. Get or create conversation for the space
+  // 1. Get or create conversation for the space/friends
   const initConversation = useCallback(async () => {
     if (!currentUserId) return null
 
     try {
       const supabase = createClient()
 
-      // Get space ID
-      const { data: spaceMember } = await supabase
-        .from('private_space_members')
-        .select('space_id')
-        .eq('auth_user_id', currentUserId)
-        .single()
+      // If partnerId is provided, get or create 1-on-1 direct conversation
+      if (partnerId) {
+        const { data: convId, error: rpcErr } = await supabase.rpc(
+          'get_or_create_friend_conversation',
+          { p_user2: partnerId }
+        )
 
-      if (!spaceMember) return null
-      const spaceId = spaceMember.space_id
+        if (!rpcErr && convId) {
+          setConversationId(convId)
+          return convId
+        }
+      }
 
-      // Check existing conversation
-      const { data: convs } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('space_id', spaceId)
+      // Fallback: Check existing conversation for user
+      const { data: convMembers } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', currentUserId)
         .limit(1)
 
-      let convId = convs?.[0]?.id
+      let convId = convMembers?.[0]?.conversation_id
 
-      // If no conversation exists, create it
       if (!convId) {
         const { data: newConv, error: convErr } = await supabase
           .from('conversations')
-          .insert({ space_id: spaceId })
+          .insert({})
           .select('id')
           .single()
 
         if (convErr) throw convErr
         convId = newConv.id
 
-        // Enroll members
         await supabase.from('conversation_members').insert([
           { conversation_id: convId, user_id: currentUserId },
           ...(partnerId ? [{ conversation_id: convId, user_id: partnerId }] : []),
@@ -82,11 +76,11 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
     }
   }, [currentUserId, partnerId])
 
-  // 2. Fetch messages & decrypt content
+  // 2. Fetch messages & resolve signed URLs with ref caching
   const fetchMessages = useCallback(
     async (convId: string, isInitial = false) => {
       try {
-        if (isInitial) setLoading(true)
+        if (isInitial && messages.length === 0) setLoading(true)
         const supabase = createClient()
 
         const { data: rawMsgs, error: msgsErr } = await supabase
@@ -108,41 +102,47 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
           return
         }
 
-        // Fetch sender profiles separately to avoid invalid PostgREST relationship join
+        // Fetch sender profiles separately
         const senderIds = Array.from(new Set(rawMsgs.map((m) => m.sender_id)))
         let senderMap = new Map()
 
         if (senderIds.length > 0) {
           const { data: senderProfiles } = await supabase
             .from('profiles')
-            .select('*')
+            .select('id, username, display_name, avatar_url')
             .in('id', senderIds)
 
           senderMap = new Map((senderProfiles || []).map((p) => [p.id, p]))
         }
 
-        // Decrypt messages & resolve media signed URLs
+        // Resolve media signed URLs with local cache to prevent image re-flash flicker
         const processedMessages: Message[] = await Promise.all(
           rawMsgs.map(async (msg) => {
-            let decrypted = msg.encrypted_content
-            if (msg.encrypted_content && msg.iv) {
-              decrypted = await decryptText(msg.encrypted_content, msg.iv)
-            }
+            const contentText = msg.content || (msg.encrypted_content ? '[Legacy encrypted message]' : '')
 
             let mediaWithUrls: MessageMedia[] = []
             if (msg.media && msg.media.length > 0) {
               mediaWithUrls = await Promise.all(
-                msg.media.map(async (m: MessageMedia) => ({
-                  ...m,
-                  media_url: (await getSignedMediaUrl(BUCKETS.MESSAGES, m.storage_path)) || undefined,
-                }))
+                msg.media.map(async (m: MessageMedia) => {
+                  let cachedUrl = signedUrlCacheRef.current.get(m.storage_path)
+                  if (!cachedUrl) {
+                    cachedUrl = (await getSignedMediaUrl(BUCKETS.MESSAGES, m.storage_path)) || undefined
+                    if (cachedUrl) {
+                      signedUrlCacheRef.current.set(m.storage_path, cachedUrl)
+                    }
+                  }
+                  return {
+                    ...m,
+                    media_url: cachedUrl,
+                  }
+                })
               )
             }
 
             return {
               ...msg,
               sender: senderMap.get(msg.sender_id) || undefined,
-              decrypted_content: decrypted || '',
+              decrypted_content: contentText,
               media: mediaWithUrls,
             }
           })
@@ -155,17 +155,23 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
         setLoading(false)
       }
     },
-    [decryptText]
+    [messages.length]
   )
 
+  const fetchMessagesRef = useRef(fetchMessages)
+  useEffect(() => {
+    fetchMessagesRef.current = fetchMessages
+  }, [fetchMessages])
+
+  // Trigger conversation init and message fetch on mount / partnerId change
   useEffect(() => {
     if (!currentUserId) return
     initConversation().then((convId) => {
       if (convId) fetchMessages(convId, true)
     })
-  }, [currentUserId, initConversation, fetchMessages])
+  }, [currentUserId, partnerId, initConversation, fetchMessages])
 
-  // 3. Realtime subscription for messages & presence
+  // 3. Realtime subscription for messages & presence (reusing presence channel ref)
   useEffect(() => {
     if (!conversationId || !currentUserId) return
     const supabase = createClient()
@@ -177,26 +183,26 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
         'postgres_changes',
         { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
         () => {
-          fetchMessages(conversationId, false)
+          fetchMessagesRef.current(conversationId, false)
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'message_reactions' },
         () => {
-          fetchMessages(conversationId, false)
+          fetchMessagesRef.current(conversationId, false)
         }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'message_read_status' },
         () => {
-          fetchMessages(conversationId, false)
+          fetchMessagesRef.current(conversationId, false)
         }
       )
       .subscribe()
 
-    // Typing & Presence Channel
+    // Single stable Presence Channel
     const presenceChannel = supabase.channel(`chat_presence:${conversationId}`, {
       config: { presence: { key: currentUserId } },
     })
@@ -213,38 +219,31 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
       })
       .subscribe()
 
+    presenceChannelRef.current = presenceChannel
+
     return () => {
       supabase.removeChannel(dbChannel)
       supabase.removeChannel(presenceChannel)
+      presenceChannelRef.current = null
     }
-  }, [conversationId, currentUserId, partnerId, fetchMessages])
+  }, [conversationId, currentUserId, partnerId])
 
-  // Broadcast typing indicator
+  // Broadcast typing indicator without creating new channels on keystroke
   const setTypingState = (typing: boolean) => {
-    if (!conversationId || !currentUserId) return
-    setIsTyping(typing)
-    const supabase = createClient()
-    const presenceChannel = supabase.channel(`chat_presence:${conversationId}`)
-    presenceChannel.track({ isTyping: typing, user_id: currentUserId })
+    if (!conversationId || !currentUserId || !presenceChannelRef.current) return
+    presenceChannelRef.current.track({ isTyping: typing, user_id: currentUserId })
 
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
     if (typing) {
       typingTimeoutRef.current = setTimeout(() => {
-        setIsTyping(false)
-        presenceChannel.track({ isTyping: false, user_id: currentUserId })
+        presenceChannelRef.current?.track({ isTyping: false, user_id: currentUserId })
       }, 3000)
     }
   }
 
-  // 4. Send encrypted text message
+  // 4. Send plaintext text message
   const sendMessage = async (text: string, replyToId?: string): Promise<boolean> => {
     if (!conversationId || !currentUserId || !text.trim()) return false
-
-    const encrypted = await encryptText(text.trim())
-    if (!encrypted) {
-      toast.error('Could not encrypt message.')
-      return false
-    }
 
     try {
       setSending(true)
@@ -253,22 +252,20 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
       const { error: sendErr } = await supabase.from('messages').insert({
         conversation_id: conversationId,
         sender_id: currentUserId,
-        encrypted_content: encrypted.ciphertext,
-        iv: encrypted.iv,
+        content: text.trim(),
         message_type: replyToId ? 'reply' : 'text',
         reply_to_id: replyToId || null,
       })
 
       if (sendErr) throw sendErr
 
-      // Trigger private notification to partner
       if (partnerId) {
         sendPrivateNotification({
           recipientId: partnerId,
           senderId: currentUserId,
           type: 'chat',
-          title: 'New Private Message',
-          body: 'Sent you a new message in Chat',
+          title: 'New Message',
+          body: text.trim().slice(0, 60),
           data: { route: '/chat' },
         })
       }
@@ -302,11 +299,9 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
       const fileExt = file.name.split('.').pop() || 'bin'
       const storagePath = `${conversationId}/${crypto.randomUUID()}.${fileExt}`
 
-      // Upload file to private messages bucket
       const { error: uploadErr } = await uploadPrivateFile(BUCKETS.MESSAGES, storagePath, file)
       if (uploadErr) throw uploadErr
 
-      // Insert message record
       const { data: newMsg, error: msgErr } = await supabase
         .from('messages')
         .insert({
@@ -319,7 +314,6 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
 
       if (msgErr) throw msgErr
 
-      // Insert message_media metadata
       const { error: mediaErr } = await supabase.from('message_media').insert({
         message_id: newMsg.id,
         storage_path: storagePath,
@@ -337,7 +331,7 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
           senderId: currentUserId,
           type: 'chat',
           title: 'New Media Shared',
-          body: `Shared a ${mediaType} in Chat`,
+          body: `Shared a ${mediaType} in chat`,
           data: { route: '/chat' },
         })
       }
@@ -370,20 +364,7 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
     }
   }
 
-  // 7. Mark message as read
-  const markAsRead = async (messageId: string) => {
-    if (!currentUserId) return
-    try {
-      const supabase = createClient()
-      await supabase
-        .from('message_read_status')
-        .upsert({ message_id: messageId, user_id: currentUserId })
-    } catch (err) {
-      console.error('Failed to mark read status:', err)
-    }
-  }
-
-  // 8. Delete own message for everyone (Storage cleanup required before DB delete)
+  // 7. Delete own message for everyone
   const deleteMessage = async (messageId: string): Promise<boolean> => {
     if (!currentUserId || !conversationId) return false
 
@@ -396,7 +377,6 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
     try {
       const supabase = createClient()
 
-      // 1. Delete storage files first if media message
       if (targetMsg.media && targetMsg.media.length > 0) {
         for (const m of targetMsg.media) {
           const { error: storageErr } = await deletePrivateFile(BUCKETS.MESSAGES, m.storage_path)
@@ -407,7 +387,6 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
         }
       }
 
-      // 2. Delete message record in DB
       const { error: delErr } = await supabase
         .from('messages')
         .delete()
@@ -426,69 +405,48 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
     }
   }
 
-  // 9. Bulk delete own messages for everyone (Per-message storage verification)
+  // 8. Bulk delete own messages
   const deleteMessages = async (messageIds: string[]): Promise<boolean> => {
     if (!currentUserId || !conversationId || messageIds.length === 0) return false
 
     const targetMsgs = messages.filter((m) => messageIds.includes(m.id) && m.sender_id === currentUserId)
-    if (targetMsgs.length === 0) {
-      toast.error('No valid own messages selected for deletion.')
-      return false
-    }
+    if (targetMsgs.length === 0) return false
 
     const supabase = createClient()
     const successfulDeletedIds: string[] = []
-    let failedCount = 0
 
     for (const msg of targetMsgs) {
       try {
-        // 1. Delete storage files first if media message
         let storageSuccess = true
         if (msg.media && msg.media.length > 0) {
           for (const m of msg.media) {
             const { error: storageErr } = await deletePrivateFile(BUCKETS.MESSAGES, m.storage_path)
             if (storageErr) {
-              console.error(`Storage deletion failed for ${m.storage_path}:`, storageErr)
               storageSuccess = false
               break
             }
           }
         }
 
-        if (!storageSuccess) {
-          failedCount++
-          continue // Abort DB deletion for this message if storage cleanup failed
-        }
+        if (!storageSuccess) continue
 
-        // 2. Delete database record
         const { error: delErr } = await supabase
           .from('messages')
           .delete()
           .eq('id', msg.id)
           .eq('sender_id', currentUserId)
 
-        if (delErr) {
-          console.error(`DB deletion failed for message ${msg.id}:`, delErr)
-          failedCount++
-        } else {
+        if (!delErr) {
           successfulDeletedIds.push(msg.id)
         }
       } catch (err) {
         console.error(`Error deleting message ${msg.id}:`, err)
-        failedCount++
       }
     }
 
     if (successfulDeletedIds.length > 0) {
       setMessages((prev) => prev.filter((m) => !successfulDeletedIds.includes(m.id)))
-    }
-
-    if (failedCount > 0 && successfulDeletedIds.length > 0) {
-      toast.warning(`Deleted ${successfulDeletedIds.length} message(s). ${failedCount} message(s) failed cleanup and remain visible.`)
-    } else if (failedCount > 0 && successfulDeletedIds.length === 0) {
-      toast.error('Failed to delete selected message(s).')
-    } else {
-      toast.success(`Deleted ${successfulDeletedIds.length} message${successfulDeletedIds.length > 1 ? 's' : ''} for everyone.`)
+      toast.success(`Deleted ${successfulDeletedIds.length} message(s).`)
     }
 
     return successfulDeletedIds.length > 0
@@ -499,14 +457,10 @@ export function useChat(currentUserId: string | undefined, partnerProfile: Profi
     messages,
     loading,
     sending,
-    isKeyInitializing,
-    partnerHasKey,
-    isTyping,
     partnerIsTyping,
     sendMessage,
     sendMediaMessage,
     reactToMessage,
-    markAsRead,
     deleteMessage,
     deleteMessages,
     setTypingState,

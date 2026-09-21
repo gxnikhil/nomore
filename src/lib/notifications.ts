@@ -1,17 +1,9 @@
 import { createClient } from './supabase/client'
 
-export type NotificationType = 'chat' | 'story' | 'album' | 'memory'
-
-const TYPE_PREF_MAP: Record<NotificationType, 'messages' | 'stories' | 'albums' | 'memories'> = {
-  chat: 'messages',
-  story: 'stories',
-  album: 'albums',
-  memory: 'memories',
-}
+export type NotificationType = 'chat' | 'story' | 'friend_request' | 'friend_accept' | 'story_reply'
 
 /**
- * Sends a notification to the partner in the private space via secure RPC function.
- * Preference checking, sender validation, and recipient targeting are enforced server-side.
+ * Sends a notification to a recipient user.
  */
 export async function sendPrivateNotification({
   recipientId,
@@ -30,23 +22,30 @@ export async function sendPrivateNotification({
 }): Promise<boolean> {
   try {
     const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-    const { data: result, error } = await supabase.rpc('create_private_notification', {
-      p_type: type,
-      p_title: title,
-      p_body: body || null,
-      p_data: data,
+    const activeSenderId = senderId || user?.id
+    if (!recipientId || !activeSenderId) return false
+
+    const { error } = await supabase.from('notifications').insert({
+      recipient_id: recipientId,
+      sender_id: activeSenderId,
+      type,
+      title,
+      body: body || null,
+      data,
     })
 
     if (error) {
-      console.error('Error sending private notification:', error)
+      console.error('Error inserting notification:', error)
       return false
     }
 
-    return Boolean(result)
+    return true
   } catch (err) {
-    console.error('Failed to send private notification:', err)
+    console.error('Failed to send notification:', err)
     return false
   }
 }
-

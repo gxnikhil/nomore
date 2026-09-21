@@ -19,6 +19,7 @@ export default function StoriesPage() {
     uploading,
     uploadProgress,
     uploadStory,
+    sendStoryReply,
     markAsViewed,
     reactToStory,
     deleteStory,
@@ -213,6 +214,7 @@ export default function StoriesPage() {
         onMarkAsViewed={markAsViewed}
         onReact={reactToStory}
         onDelete={deleteStory}
+        onSendReply={sendStoryReply}
       />
     </div>
   )

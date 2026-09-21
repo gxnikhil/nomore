@@ -1,88 +1,70 @@
 'use client'
 
 import Link from 'next/link'
-import { Heart, Settings } from 'lucide-react'
+import { Settings, Search } from 'lucide-react'
 import { APP_NAME } from '@/lib/constants'
 import { Profile } from '@/lib/types'
 import NotificationBell from '../notifications/NotificationBell'
 
 interface HeaderProps {
   currentUserId?: string
-  partnerProfile?: Profile | null
-  isPartnerOnline?: boolean
+  userProfile?: Profile | null
 }
 
-export default function Header({ currentUserId, partnerProfile, isPartnerOnline }: HeaderProps) {
-  const partnerName = partnerProfile?.display_name || partnerProfile?.username || 'Partner'
+export default function Header({ currentUserId, userProfile }: HeaderProps) {
+  const userName = userProfile?.display_name || userProfile?.username || 'Profile'
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-[var(--color-border)] bg-[var(--color-bg-primary)]/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 w-full border-b border-[#e5e5e7] bg-white/90 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        {/* Brand */}
-        <Link href="/home" className="flex items-center gap-2 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-rose)] p-[1px] shadow-sm transition-transform group-hover:scale-105">
-            <div className="w-full h-full bg-[var(--color-bg-primary)] rounded-[11px] flex items-center justify-center">
-              <Heart className="w-4 h-4 text-[var(--color-accent)] fill-[var(--color-accent)]/20" />
-            </div>
+        {/* Brand Logo */}
+        <Link href="/home" className="flex items-center gap-2.5 group">
+          <div className="w-8 h-8 rounded-xl bg-black text-white flex items-center justify-center font-bold text-sm shadow-sm transition-transform group-hover:scale-105">
+            N
           </div>
-          <div>
-            <span className="font-display font-bold text-xl tracking-tight text-[var(--color-text-primary)]">
-              {APP_NAME}
-            </span>
-          </div>
+          <span className="font-bold text-lg tracking-tight text-black">
+            {APP_NAME}
+          </span>
         </Link>
 
-        {/* Right Section: Notification Bell + Partner Presence + Settings */}
-        <div className="flex items-center gap-3">
-          {/* Real-time Notification Bell */}
+        {/* Right Section: Search + Notifications + Profile + Settings */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href="/search"
+            className="p-2 rounded-full text-[#555555] hover:text-black hover:bg-[#f5f5f7] transition-colors"
+            title="Search Users"
+          >
+            <Search className="w-5 h-5" />
+          </Link>
+
           <NotificationBell currentUserId={currentUserId} />
 
-          {/* Partner Presence Bar */}
           <Link
             href="/profile"
-            className="flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-[var(--color-bg-secondary)] border border-[var(--color-border)] hover:border-[var(--color-border-light)] transition-all"
-            title={`View ${partnerName}'s profile`}
+            className="flex items-center gap-2 p-1.5 rounded-full border border-[#e5e5e7] hover:border-[#d2d2d7] bg-[#f5f5f7] transition-all"
+            title="View Profile"
           >
-            <div className="relative w-7 h-7 rounded-full overflow-hidden bg-[var(--color-bg-elevated)] border border-[var(--color-border-light)] flex items-center justify-center text-xs font-medium text-[var(--color-accent)]">
-              {partnerProfile?.avatar_url ? (
+            <div className="w-7 h-7 rounded-full overflow-hidden bg-white border border-[#e5e5e7] flex items-center justify-center text-xs font-bold text-black">
+              {userProfile?.avatar_url ? (
                 <img
-                  src={partnerProfile.avatar_url}
-                  alt={partnerName}
+                  src={userProfile.avatar_url}
+                  alt={userName}
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <span>{partnerName.charAt(0).toUpperCase()}</span>
+                <span>{userName.charAt(0).toUpperCase()}</span>
               )}
-
-              {/* Online badge */}
-              <span
-                className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[var(--color-bg-primary)] ${
-                  isPartnerOnline ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' : 'bg-stone-600'
-                }`}
-              />
             </div>
-
-            <div className="hidden sm:flex flex-col text-left">
-              <span className="text-xs font-semibold leading-none text-[var(--color-text-primary)]">
-                {partnerName}
+            {userProfile?.username && (
+              <span className="hidden sm:inline text-xs font-semibold text-black pr-2">
+                @{userProfile.username}
               </span>
-              <span className="text-[10px] leading-tight text-[var(--color-text-muted)] flex items-center gap-1">
-                {isPartnerOnline ? (
-                  <>
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Online
-                  </>
-                ) : (
-                  'Away'
-                )}
-              </span>
-            </div>
+            )}
           </Link>
 
-          {/* Quick Settings Icon */}
           <Link
             href="/settings"
-            className="p-2 rounded-xl text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)] transition-colors"
+            className="p-2 rounded-full text-[#555555] hover:text-black hover:bg-[#f5f5f7] transition-colors"
             title="Settings"
           >
             <Settings className="w-5 h-5" />

@@ -3,10 +3,6 @@ import { createClient } from '@/lib/supabase/server'
 import AppShell from '@/components/layout/AppShell'
 import { Profile } from '@/lib/types'
 
-const ALLOWED_EMAILS = [
-  'nikhiltripathi911@gmail.com',
-  'dwivedivaishnavi15@gmail.com',
-]
 
 export default async function AppLayout({
   children,
@@ -23,24 +19,27 @@ export default async function AppLayout({
     redirect('/login')
   }
 
-  const email = user.email?.toLowerCase()
-  if (!email || !ALLOWED_EMAILS.includes(email)) {
-    redirect('/access-denied')
+  // Fetch current user profile
+  let userProfile: Profile | null = null
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    userProfile = profile || null
+  } catch (err) {
+    console.error('Failed to fetch profile in AppLayout:', err)
   }
 
-  // Fetch profiles for the private space
-  let partnerProfile: Profile | null = null
-  try {
-    const { data: profiles } = await supabase.from('profiles').select('*')
-    if (profiles && profiles.length > 0) {
-      partnerProfile = profiles.find((p: Profile) => p.id !== user.id) || null
-    }
-  } catch (err) {
-    console.error('Failed to fetch profiles in AppLayout:', err)
+  // If user has not chosen a unique username yet, redirect to setup
+  if (!userProfile?.username) {
+    redirect('/username-setup')
   }
 
   return (
-    <AppShell userId={user.id} partnerProfile={partnerProfile}>
+    <AppShell userId={user.id} userProfile={userProfile}>
       {children}
     </AppShell>
   )

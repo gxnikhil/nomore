@@ -31,8 +31,6 @@ export function useUserSettings(currentUserId: string | undefined) {
           notification_prefs: {
             messages: true,
             stories: true,
-            albums: true,
-            memories: true,
           },
           updated_at: new Date().toISOString(),
         }
@@ -64,7 +62,7 @@ export function useUserSettings(currentUserId: string | undefined) {
 
   // Update notification preferences
   const updateNotificationPrefs = async (
-    key: 'messages' | 'stories' | 'albums' | 'memories',
+    key: 'messages' | 'stories',
     value: boolean
   ) => {
     if (!currentUserId || !settings) return

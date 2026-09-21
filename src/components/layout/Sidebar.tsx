@@ -4,12 +4,12 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Home,
-  Flame,
-  Images,
+  Search,
+  Users,
   MessageCircle,
+  Flame,
   User,
   Settings,
-  Heart,
 } from 'lucide-react'
 
 export const NAV_ITEMS = [
@@ -19,20 +19,25 @@ export const NAV_ITEMS = [
     icon: Home,
   },
   {
-    name: 'Stories',
-    href: '/stories',
-    icon: Flame,
-    badge: '24h',
+    name: 'Search',
+    href: '/search',
+    icon: Search,
   },
   {
-    name: 'Memories',
-    href: '/memories',
-    icon: Images,
+    name: 'Friends',
+    href: '/friends',
+    icon: Users,
   },
   {
     name: 'Chat',
     href: '/chat',
     icon: MessageCircle,
+  },
+  {
+    name: 'Stories',
+    href: '/stories',
+    icon: Flame,
+    badge: '24h',
   },
   {
     name: 'Profile',
@@ -45,8 +50,8 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="hidden md:flex flex-col w-64 border-r border-[var(--color-border)] bg-[var(--color-bg-primary)] p-4 min-h-[calc(100dvh-4rem)]">
-      <nav className="space-y-1.5 flex-1">
+    <aside className="hidden md:flex flex-col w-64 border-r border-[#e5e5e7] bg-white p-4 min-h-[calc(100dvh-4rem)]">
+      <nav className="space-y-1 flex-1">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           const Icon = item.icon
@@ -56,23 +61,29 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               aria-label={`Navigate to ${item.name}`}
-              className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+              className={`flex items-center justify-between px-4 py-3 rounded-full text-sm font-semibold transition-all ${
                 isActive
-                  ? 'bg-gradient-to-r from-[var(--color-accent-dark)]/20 to-transparent border-l-2 border-[var(--color-accent)] text-[var(--color-text-primary)] font-semibold'
-                  : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)]'
+                  ? 'bg-black text-white shadow-sm'
+                  : 'text-[#555555] hover:text-black hover:bg-[#f5f5f7]'
               }`}
             >
               <div className="flex items-center gap-3">
                 <Icon
                   className={`w-5 h-5 ${
-                    isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'
+                    isActive ? 'text-white' : 'text-[#86868b]'
                   }`}
                 />
                 <span>{item.name}</span>
               </div>
 
               {item.badge && (
-                <span className="text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full bg-[var(--color-accent)]/20 text-[var(--color-accent-light)] border border-[var(--color-accent)]/30">
+                <span
+                  className={`text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full ${
+                    isActive
+                      ? 'bg-white/20 text-white'
+                      : 'bg-[#f5f5f7] text-black border border-[#e5e5e7]'
+                  }`}
+                >
                   {item.badge}
                 </span>
               )}
@@ -81,27 +92,19 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer info card */}
-      <div className="pt-4 border-t border-[var(--color-border)]">
+      {/* Footer info */}
+      <div className="pt-4 border-t border-[#e5e5e7]">
         <Link
           href="/settings"
-          className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+          className={`flex items-center gap-3 px-4 py-3 rounded-full text-sm font-semibold transition-all ${
             pathname === '/settings'
-              ? 'bg-[var(--color-bg-hover)] text-[var(--color-text-primary)]'
-              : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-hover)]'
+              ? 'bg-black text-white'
+              : 'text-[#555555] hover:text-black hover:bg-[#f5f5f7]'
           }`}
         >
-          <Settings className="w-5 h-5 text-[var(--color-text-muted)]" />
+          <Settings className="w-5 h-5 text-[#86868b]" />
           <span>Settings</span>
         </Link>
-
-        <div className="mt-4 p-3 rounded-xl glass-card text-center text-xs text-[var(--color-text-muted)]">
-          <p className="flex items-center justify-center gap-1">
-            <span>Made with</span>
-            <Heart className="w-3 h-3 text-[var(--color-rose)] fill-[var(--color-rose)] inline" />
-            <span>just for us</span>
-          </p>
-        </div>
       </div>
     </aside>
   )

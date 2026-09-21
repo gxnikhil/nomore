@@ -21,13 +21,16 @@ export function useProfile(currentUserId: string | undefined) {
       setLoading(true)
       const supabase = createClient()
 
-      const { data: rawProfiles, error: dbErr } = await supabase.from('profiles').select('*')
+      const { data: rawProfiles, error: dbErr } = await supabase
+        .from('profiles')
+        .select('id, username, display_name, avatar_url, bio')
+        .eq('id', currentUserId)
+
       if (dbErr) throw dbErr
 
-      if (!rawProfiles) return
+      if (!rawProfiles || rawProfiles.length === 0) return
 
-      const myProfRaw = rawProfiles.find((p) => p.id === currentUserId) || null
-      const partnerProfRaw = rawProfiles.find((p) => p.id !== currentUserId) || null
+      const myProfRaw = rawProfiles[0]
 
       // Resolve signed URL for my avatar
       let myAvatarSignedUrl = undefined
@@ -36,30 +39,15 @@ export function useProfile(currentUserId: string | undefined) {
           (await getSignedMediaUrl(BUCKETS.AVATARS, myProfRaw.avatar_url)) || undefined
       }
 
-      // Resolve signed URL for partner avatar
-      let partnerAvatarSignedUrl = undefined
-      if (partnerProfRaw?.avatar_url) {
-        partnerAvatarSignedUrl =
-          (await getSignedMediaUrl(BUCKETS.AVATARS, partnerProfRaw.avatar_url)) || undefined
-      }
-
       setProfile(
         myProfRaw
-          ? {
+          ? ({
               ...myProfRaw,
               avatar_url: myAvatarSignedUrl || myProfRaw.avatar_url,
-            }
+            } as Profile)
           : null
       )
-
-      setPartnerProfile(
-        partnerProfRaw
-          ? {
-              ...partnerProfRaw,
-              avatar_url: partnerAvatarSignedUrl || partnerProfRaw.avatar_url,
-            }
-          : null
-      )
+      setPartnerProfile(null)
     } catch (err: any) {
       console.error('Error fetching profiles:', err)
       toast.error('Failed to load profile details.')

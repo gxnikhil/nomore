@@ -8,31 +8,16 @@ export interface Profile {
   username: string | null
   avatar_url: string | null
   bio: string | null
-  email: string | null
-  birthday: string | null
-  relationship_info: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface PrivateSpace {
-  id: string
-  name: string
-  created_at: string
-}
-
-export interface PrivateSpaceMember {
-  id: string
-  space_id: string
-  auth_user_id: string
-  role: string
-  joined_at: string
+  email?: string | null
+  birthday?: string | null
+  relationship_info?: string | null
+  created_at?: string
+  updated_at?: string
 }
 
 export interface Story {
   id: string
   user_id: string
-  space_id: string
   media_type: 'image' | 'video'
   storage_path: string
   caption: string | null
@@ -63,7 +48,6 @@ export interface StoryReaction {
 
 export interface Conversation {
   id: string
-  space_id: string
   created_at: string
 }
 
@@ -71,6 +55,7 @@ export interface Message {
   id: string
   conversation_id: string
   sender_id: string
+  content: string | null
   encrypted_content: string | null
   iv: string | null
   message_type: 'text' | 'media' | 'system' | 'reply'
@@ -78,7 +63,7 @@ export interface Message {
   is_deleted: boolean
   created_at: string
   updated_at: string
-  // Client-side decrypted content
+  // Display content
   decrypted_content?: string
   // Joined
   sender?: Profile
@@ -118,55 +103,6 @@ export interface MessageReadStatus {
   read_at: string
 }
 
-export interface SharedAlbum {
-  id: string
-  space_id: string
-  title: string
-  description: string | null
-  cover_storage_path: string | null
-  created_by: string
-  created_at: string
-  updated_at: string
-  // Joined
-  cover_url?: string
-  media_count?: number
-  creator?: Profile
-}
-
-export interface AlbumMedia {
-  id: string
-  album_id: string
-  storage_path: string
-  media_type: 'image' | 'video'
-  mime_type: string | null
-  caption: string | null
-  file_name: string | null
-  file_size: number | null
-  uploaded_by: string
-  taken_at: string | null
-  created_at: string
-  // Client-side
-  media_url?: string
-}
-
-export interface SavedMedia {
-  id: string
-  space_id: string
-  storage_path: string
-  media_type: 'image' | 'video'
-  mime_type: string | null
-  caption: string | null
-  file_name: string | null
-  file_size: number | null
-  uploaded_by: string
-  memory_date: string | null
-  is_favorite: boolean
-  created_at: string
-  // Client-side
-  media_url?: string
-  uploader?: Profile
-}
-
 export interface Notification {
   id: string
   recipient_id: string
@@ -187,16 +123,7 @@ export interface UserSettings {
   notification_prefs: {
     messages: boolean
     stories: boolean
-    albums: boolean
-    memories: boolean
   }
-  updated_at: string
-}
-
-export interface EncryptionKey {
-  user_id: string
-  public_key_jwk: JsonWebKey
-  created_at: string
   updated_at: string
 }
 

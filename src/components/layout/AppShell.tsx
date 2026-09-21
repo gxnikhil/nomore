@@ -5,25 +5,18 @@ import Header from './Header'
 import Sidebar from './Sidebar'
 import BottomNav from './BottomNav'
 import { Profile } from '@/lib/types'
-import { usePresence } from '@/hooks/usePresence'
 
 interface AppShellProps {
   children: React.ReactNode
   userId: string
-  partnerProfile: Profile | null
+  userProfile?: Profile | null
 }
 
-export default function AppShell({ children, userId, partnerProfile }: AppShellProps) {
-  const presence = usePresence(userId, partnerProfile?.id)
-
+export default function AppShell({ children, userId, userProfile }: AppShellProps) {
   return (
-    <div className="min-h-dvh flex flex-col bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]">
+    <div className="min-h-dvh flex flex-col bg-[#ffffff] text-black">
       {/* Top Header */}
-      <Header
-        currentUserId={userId}
-        partnerProfile={partnerProfile}
-        isPartnerOnline={presence.isPartnerOnline}
-      />
+      <Header currentUserId={userId} userProfile={userProfile} />
 
       {/* Body container with Sidebar & Main Content */}
       <div className="flex-1 max-w-7xl w-full mx-auto flex">

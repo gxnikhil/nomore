@@ -1,39 +1,37 @@
 @import "tailwindcss";
 
 @theme {
-  /* Warm, intimate color palette */
-  --color-bg-primary: #0a0a0f;
-  --color-bg-secondary: #12121a;
-  --color-bg-card: #1a1a24;
-  --color-bg-elevated: #222230;
-  --color-bg-hover: #2a2a3a;
+  /* Apple Minimalist Color Palette */
+  --color-bg-primary: #ffffff;
+  --color-bg-secondary: #f5f5f7;
+  --color-bg-card: #ffffff;
+  --color-bg-elevated: #f5f5f7;
+  --color-bg-hover: #e8e8ed;
   
-  --color-text-primary: #f0ece4;
-  --color-text-secondary: #a09a8e;
-  --color-text-muted: #6b6560;
+  --color-text-primary: #000000;
+  --color-text-secondary: #555555;
+  --color-text-muted: #86868b;
   
-  --color-accent: #c8956c;
-  --color-accent-light: #e0b08a;
-  --color-accent-dark: #a07048;
-  --color-accent-glow: rgba(200, 149, 108, 0.15);
+  --color-accent: #000000;
+  --color-accent-light: #333333;
+  --color-accent-dark: #000000;
+  --color-accent-blue: #0071e3;
+  --color-accent-glow: rgba(0, 0, 0, 0.06);
   
-  --color-rose: #c47070;
-  --color-rose-light: #d4908e;
+  --color-border: #e5e5e7;
+  --color-border-light: #d2d2d7;
   
-  --color-border: #2a2a36;
-  --color-border-light: #3a3a48;
-  
-  --color-success: #6bc47a;
-  --color-error: #c46b6b;
-  --color-warning: #c4a86b;
+  --color-success: #34c759;
+  --color-error: #ff3b30;
+  --color-warning: #ff9500;
 
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-display: 'Outfit', 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
 
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
-  --radius-xl: 1.5rem;
+  --radius-xl: 1.25rem;
   --radius-full: 9999px;
 }
 
@@ -73,45 +71,33 @@ body {
 
 /* Glass card effect */
 .glass-card {
-  background: linear-gradient(
-    135deg,
-    rgba(26, 26, 36, 0.8) 0%,
-    rgba(18, 18, 26, 0.6) 100%
-  );
+  background: #ffffff;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .glass-card-hover {
-  transition: all 0.3s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-card-hover:hover {
   border-color: var(--color-border-light);
-  background: linear-gradient(
-    135deg,
-    rgba(34, 34, 48, 0.8) 0%,
-    rgba(22, 22, 34, 0.6) 100%
-  );
+  background: #ffffff;
   transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 /* Glow effects */
 .glow-accent {
-  box-shadow: 0 0 20px var(--color-accent-glow),
-    0 0 40px rgba(200, 149, 108, 0.05);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 /* Story ring gradient */
 .story-ring {
-  background: conic-gradient(
-    var(--color-accent),
-    var(--color-rose),
-    var(--color-accent-light),
-    var(--color-accent)
-  );
+  background: linear-gradient(135deg, #000000 0%, #555555 100%);
   padding: 2px;
   border-radius: var(--radius-full);
 }
@@ -122,61 +108,41 @@ body {
   border-radius: var(--radius-full);
 }
 
-/* Animated gradient background */
-.gradient-bg {
-  background: radial-gradient(
-    ellipse at 20% 50%,
-    rgba(200, 149, 108, 0.08) 0%,
-    transparent 50%
-  ),
-  radial-gradient(
-    ellipse at 80% 20%,
-    rgba(196, 112, 112, 0.06) 0%,
-    transparent 50%
-  ),
-  radial-gradient(
-    ellipse at 50% 80%,
-    rgba(200, 149, 108, 0.04) 0%,
-    transparent 50%
-  ),
-  var(--color-bg-primary);
-}
-
 /* Button styles */
 .btn-primary {
-  background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-dark) 100%);
-  color: #0a0a0f;
-  font-weight: 600;
+  background: #000000;
+  color: #ffffff;
+  font-weight: 500;
   padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-md);
-  transition: all 0.2s ease;
+  border-radius: var(--radius-full);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   border: none;
   cursor: pointer;
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(200, 149, 108, 0.3);
+  background: #222222;
+  transform: scale(1.01);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .btn-primary:active {
-  transform: translateY(0);
+  transform: scale(0.99);
 }
 
 .btn-secondary {
-  background: var(--color-bg-elevated);
-  color: var(--color-text-primary);
+  background: #f5f5f7;
+  color: #000000;
   font-weight: 500;
   padding: 0.75rem 1.5rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   transition: all 0.2s ease;
   border: 1px solid var(--color-border);
   cursor: pointer;
 }
 
 .btn-secondary:hover {
-  background: var(--color-bg-hover);
+  background: #e8e8ed;
   border-color: var(--color-border-light);
 }
 
@@ -198,13 +164,13 @@ body {
 
 /* Input styles */
 .input-field {
-  background: var(--color-bg-secondary);
+  background: #f5f5f7;
   border: 1px solid var(--color-border);
   color: var(--color-text-primary);
   padding: 0.75rem 1rem;
   border-radius: var(--radius-md);
   font-size: 0.875rem;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
   width: 100%;
   outline: none;
 }
@@ -214,48 +180,21 @@ body {
 }
 
 .input-field:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px var(--color-accent-glow);
-}
-
-/* Skeleton loader */
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-bg-card) 0%,
-    var(--color-bg-elevated) 50%,
-    var(--color-bg-card) 100%
-  );
-  background-size: 200% 100%;
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
-  border-radius: var(--radius-md);
-}
-
-@keyframes skeleton-pulse {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* Fade in animation */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
+  background: #ffffff;
+  border-color: #000000;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
 
 /* Chat bubble */
 .chat-bubble-sent {
-  background: linear-gradient(135deg, var(--color-accent-dark) 0%, rgba(160, 112, 72, 0.8) 100%);
-  color: #f0ece4;
+  background: #000000;
+  color: #ffffff;
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
 }
 
 .chat-bubble-received {
-  background: var(--color-bg-elevated);
-  color: var(--color-text-primary);
+  background: #f5f5f7;
+  color: #000000;
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-sm);
 }
 

@@ -4,10 +4,19 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getSignedMediaUrl, uploadPrivateFile, deletePrivateFile } from '@/lib/supabase/storage'
 import { sendPrivateNotification } from '@/lib/notifications'
-import { Story, Profile, StoryView, StoryReaction } from '@/lib/types'
+import { Story, StoryView, StoryReaction, Profile } from '@/lib/types'
 import { validateMediaFile, getMediaType } from '@/lib/utils'
 import { BUCKETS } from '@/lib/constants'
 import { toast } from 'sonner'
+
+export interface StoryReply {
+  id: string
+  story_id: string
+  sender_id: string
+  content: string
+  created_at: string
+  sender?: Profile
+}
 
 export function useStories(userId: string | undefined) {
   const [stories, setStories] = useState<Story[]>([])
@@ -16,7 +25,7 @@ export function useStories(userId: string | undefined) {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
 
-  // Fetch all active (unexpired) stories
+  // Fetch unexpired stories (author or friends)
   const fetchStories = useCallback(async () => {
     if (!userId) return
 
@@ -45,16 +54,16 @@ export function useStories(userId: string | undefined) {
         return
       }
 
-      // 2. Fetch author profiles separately (avoiding invalid PostgREST relationship join)
+      // 2. Fetch author profiles separately
       const authorIds = Array.from(new Set(rawStories.map((s) => s.user_id)))
       const { data: profilesData } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, username, display_name, avatar_url')
         .in('id', authorIds)
 
       const profileMap = new Map((profilesData || []).map((p) => [p.id, p]))
 
-      // 3. Resolve signed URLs for each story media file & attach author profile
+      // 3. Resolve signed URLs for each story media file
       const storiesWithUrls: Story[] = await Promise.all(
         rawStories.map(async (story) => {
           const mediaUrl = await getSignedMediaUrl(BUCKETS.STORIES, story.storage_path)
@@ -79,7 +88,7 @@ export function useStories(userId: string | undefined) {
     fetchStories()
   }, [fetchStories])
 
-  // Real-time listener for stories table
+  // Real-time listener for stories
   useEffect(() => {
     if (!userId) return
     const supabase = createClient()
@@ -89,9 +98,7 @@ export function useStories(userId: string | undefined) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'stories' },
-        () => {
-          fetchStories()
-        }
+        () => fetchStories()
       )
       .subscribe()
 
@@ -104,7 +111,6 @@ export function useStories(userId: string | undefined) {
   const uploadStory = async (file: File, caption?: string): Promise<boolean> => {
     if (!userId) return false
 
-    // 1. Validate file type and size
     const validation = validateMediaFile(file)
     if (!validation.valid) {
       toast.error(validation.error || 'Invalid story file.')
@@ -116,34 +122,19 @@ export function useStories(userId: string | undefined) {
       setUploadProgress(20)
       const supabase = createClient()
 
-      // 2. Get space ID
-      const { data: memberData, error: spaceError } = await supabase
-        .from('private_space_members')
-        .select('space_id')
-        .eq('auth_user_id', userId)
-        .single()
-
-      if (spaceError || !memberData) {
-        throw new Error('Could not find your private space.')
-      }
-
-      const spaceId = memberData.space_id
       const mediaType = getMediaType(file.type)
       const fileExt = file.name.split('.').pop() || 'bin'
       const storagePath = `${userId}/${crypto.randomUUID()}.${fileExt}`
 
       setUploadProgress(50)
 
-      // 3. Upload file to private stories bucket
       const { error: storageError } = await uploadPrivateFile(BUCKETS.STORIES, storagePath, file)
       if (storageError) throw storageError
 
       setUploadProgress(80)
 
-      // 4. Insert story database record
       const { error: dbError } = await supabase.from('stories').insert({
         user_id: userId,
-        space_id: spaceId,
         media_type: mediaType,
         storage_path: storagePath,
         caption: caption?.trim() || null,
@@ -151,25 +142,6 @@ export function useStories(userId: string | undefined) {
       })
 
       if (dbError) throw dbError
-
-      // Fetch partner user ID to trigger private notification
-      const { data: partnerMember } = await supabase
-        .from('private_space_members')
-        .select('auth_user_id')
-        .eq('space_id', spaceId)
-        .neq('auth_user_id', userId)
-        .single()
-
-      if (partnerMember?.auth_user_id) {
-        sendPrivateNotification({
-          recipientId: partnerMember.auth_user_id,
-          senderId: userId,
-          type: 'story',
-          title: 'New Ephemeral Story',
-          body: 'Posted a new 24h story',
-          data: { route: '/stories' },
-        })
-      }
 
       setUploadProgress(100)
       toast.success('Story posted!')
@@ -185,26 +157,93 @@ export function useStories(userId: string | undefined) {
     }
   }
 
+  // Send story reply
+  const sendStoryReply = async (storyId: string, content: string): Promise<boolean> => {
+    if (!userId || !content.trim()) return false
+
+    try {
+      const supabase = createClient()
+      const targetStory = stories.find((s) => s.id === storyId)
+      if (!targetStory) return false
+
+      const { error } = await supabase.from('story_replies').insert({
+        story_id: storyId,
+        sender_id: userId,
+        content: content.trim(),
+      })
+
+      if (error) throw error
+
+      // Send private notification to story owner
+      if (targetStory.user_id !== userId) {
+        sendPrivateNotification({
+          recipientId: targetStory.user_id,
+          senderId: userId,
+          type: 'story_reply',
+          title: 'New Story Reply',
+          body: content.trim().slice(0, 60),
+          data: { route: '/stories' },
+        })
+      }
+
+      toast.success('Reply sent!')
+      return true
+    } catch (err: any) {
+      console.error('Error sending story reply:', err)
+      toast.error('Failed to send reply.')
+      return false
+    }
+  }
+
+  // Fetch replies for a story (author only)
+  const fetchStoryReplies = async (storyId: string): Promise<StoryReply[]> => {
+    try {
+      const supabase = createClient()
+      const { data: rawReplies, error } = await supabase
+        .from('story_replies')
+        .select('*')
+        .eq('story_id', storyId)
+        .order('created_at', { ascending: true })
+
+      if (error) throw error
+      if (!rawReplies) return []
+
+      const senderIds = Array.from(new Set(rawReplies.map((r) => r.sender_id)))
+      let senderMap = new Map()
+
+      if (senderIds.length > 0) {
+        const { data: senderProfiles } = await supabase
+          .from('profiles')
+          .select('id, username, display_name, avatar_url')
+          .in('id', senderIds)
+
+        senderMap = new Map((senderProfiles || []).map((p) => [p.id, p]))
+      }
+
+      return rawReplies.map((r) => ({
+        ...r,
+        sender: senderMap.get(r.sender_id),
+      }))
+    } catch (err) {
+      console.error('Error fetching story replies:', err)
+      return []
+    }
+  }
+
   // Mark story as viewed
   const markAsViewed = async (storyId: string) => {
     if (!userId) return
 
-    // Check if already viewed locally
     const targetStory = stories.find((s) => s.id === storyId)
     if (targetStory?.views?.some((v) => v.viewer_id === userId)) return
 
     try {
       const supabase = createClient()
-      const { error: viewError } = await supabase
+      await supabase
         .from('story_views')
         .insert({ story_id: storyId, viewer_id: userId })
         .single()
 
-      if (viewError && !viewError.message.includes('unique')) {
-        console.error('View record error:', viewError)
-      }
-
-      // Optimistic update
       setStories((prev) =>
         prev.map((s) => {
           if (s.id === storyId) {
@@ -214,10 +253,7 @@ export function useStories(userId: string | undefined) {
               viewer_id: userId,
               viewed_at: new Date().toISOString(),
             }
-            return {
-              ...s,
-              views: [...(s.views || []), newView],
-            }
+            return { ...s, views: [...(s.views || []), newView] }
           }
           return s
         })
@@ -236,18 +272,14 @@ export function useStories(userId: string | undefined) {
       const targetStory = stories.find((s) => s.id === storyId)
       const existingReaction = targetStory?.reactions?.find((r) => r.user_id === userId)
 
-      // 1. Delete existing reaction for this user on this story if present
       if (existingReaction) {
-        const { error: delErr } = await supabase
+        await supabase
           .from('story_reactions')
           .delete()
           .eq('story_id', storyId)
           .eq('user_id', userId)
-
-        if (delErr) throw delErr
       }
 
-      // 2. If selecting a new emoji (or if no reaction existed), insert new reaction
       let newReactionItem: StoryReaction | null = null
       if (!existingReaction || existingReaction.emoji !== emoji) {
         const { data: inserted, error: insErr } = await supabase
@@ -262,7 +294,6 @@ export function useStories(userId: string | undefined) {
 
       toast.success(existingReaction && existingReaction.emoji === emoji ? 'Reaction removed' : `Reacted ${emoji}`)
 
-      // Optimistic update
       setStories((prev) =>
         prev.map((s) => {
           if (s.id === storyId) {
@@ -287,12 +318,9 @@ export function useStories(userId: string | undefined) {
 
     try {
       const supabase = createClient()
-
-      // 1. Delete DB record
       const { error: dbError } = await supabase.from('stories').delete().eq('id', storyId)
       if (dbError) throw dbError
 
-      // 2. Delete Storage object
       await deletePrivateFile(BUCKETS.STORIES, storagePath)
 
       toast.success('Story deleted.')
@@ -311,6 +339,8 @@ export function useStories(userId: string | undefined) {
     uploadProgress,
     fetchStories,
     uploadStory,
+    sendStoryReply,
+    fetchStoryReplies,
     markAsViewed,
     reactToStory,
     deleteStory,

@@ -3,7 +3,7 @@
 // ============================================================================
 
 export const APP_NAME = 'NOMORE'
-export const APP_TAGLINE = 'Our little space.'
+export const APP_TAGLINE = 'Connect & Share.'
 
 // Media limits (in bytes)
 export const MAX_PHOTO_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -19,13 +19,10 @@ export const ALLOWED_MEDIA_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_VIDEO_TYP
 export const STORY_DURATION_HOURS = 24
 
 // Signed URL expiry (seconds)
-export const SIGNED_URL_EXPIRY = 60 // 60 seconds
+export const SIGNED_URL_EXPIRY = 60
 
 // Chat pagination
 export const MESSAGES_PER_PAGE = 30
-
-// Memories pagination
-export const MEMORIES_PER_PAGE = 20
 
 // Emoji reactions
 export const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '🔥', '👏']
@@ -33,14 +30,13 @@ export const QUICK_REACTIONS = ['❤️', '😂', '😮', '😢', '🔥', '👏'
 // Routes
 export const ROUTES = {
   HOME: '/home',
+  SEARCH: '/search',
+  FRIENDS: '/friends',
   CHAT: '/chat',
-  MEMORIES: '/memories',
-  ALBUMS: '/albums',
+  STORIES: '/stories',
   PROFILE: '/profile',
   SETTINGS: '/settings',
-  STORIES: '/stories',
   LOGIN: '/login',
-  ACCESS_DENIED: '/access-denied',
 } as const
 
 // Storage buckets
@@ -48,6 +44,4 @@ export const BUCKETS = {
   AVATARS: 'avatars',
   STORIES: 'stories',
   MESSAGES: 'messages',
-  ALBUMS: 'albums',
-  MEMORIES: 'memories',
 } as const
