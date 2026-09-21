@@ -23,6 +23,7 @@ export default function StoriesPage() {
     markAsViewed,
     reactToStory,
     deleteStory,
+    fetchStoryViewers,
   } = useStories(currentUserId)
 
   const [isUploaderOpen, setIsUploaderOpen] = useState(false)
