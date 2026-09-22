@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import { Settings, Search } from 'lucide-react'
-import { APP_NAME } from '@/lib/constants'
 import { Profile } from '@/lib/types'
 import NotificationBell from '../notifications/NotificationBell'
+import Logo from '@/components/common/Logo'
 
 interface HeaderProps {
   currentUserId?: string
@@ -18,13 +18,8 @@ export default function Header({ currentUserId, userProfile }: HeaderProps) {
     <header className="sticky top-0 z-40 w-full border-b border-[#e5e5e7] bg-white/90 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Brand Logo */}
-        <Link href="/home" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-xl bg-black text-white flex items-center justify-center font-bold text-sm shadow-sm transition-transform group-hover:scale-105">
-            N
-          </div>
-          <span className="font-bold text-lg tracking-tight text-black">
-            {APP_NAME}
-          </span>
+        <Link href="/home" className="flex items-center gap-2.5 group hover:opacity-90 transition-opacity">
+          <Logo variant="header" size={32} />
         </Link>
 
         {/* Right Section: Search + Notifications + Profile + Settings */}

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter, Outfit } from 'next/font/google'
+import { Inter, Outfit, Poppins } from 'next/font/google'
 import { Toaster } from 'sonner'
 import './globals.css'
 
@@ -15,11 +15,18 @@ const outfit = Outfit({
   display: 'swap',
 })
 
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600'],
+  variable: '--font-poppins',
+  display: 'swap',
+})
+
 export const metadata: Metadata = {
   title: 'NOMORE — Our little space',
   description: 'A private space for two.',
   robots: 'noindex, nofollow',
-  icons: { icon: '/favicon.ico' },
+  icons: { icon: '/assets/nomore-logo.png' },
 }
 
 export default function RootLayout({
@@ -28,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${outfit.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${outfit.variable} ${poppins.variable}`} suppressHydrationWarning>
       <body className="antialiased">
         {children}
         <Toaster

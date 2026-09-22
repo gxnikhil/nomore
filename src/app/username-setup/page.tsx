@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AtSign, Check, X, Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
+import Logo from '@/components/common/Logo'
 
 export default function UsernameSetupPage() {
   const [username, setUsername] = useState('')
@@ -138,9 +139,7 @@ export default function UsernameSetupPage() {
     <div className="min-h-dvh flex items-center justify-center p-4 bg-[#f5f5f7] text-black">
       <div className="w-full max-w-md bg-white border border-[#e5e5e7] rounded-3xl p-8 shadow-xl animate-fade-in">
         <div className="text-center space-y-2 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-black text-white mx-auto flex items-center justify-center font-bold text-xl mb-4 shadow-md">
-            N
-          </div>
+          <Logo variant="icon" size={48} className="justify-center mb-4" />
           <h1 className="text-2xl font-bold tracking-tight text-black">
             Choose your Username
           </h1>
